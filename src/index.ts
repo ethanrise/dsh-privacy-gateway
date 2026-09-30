@@ -58,7 +58,7 @@ export function apply(ctx: Context): void {
         const safe = redactDocument(document, scan, policies, secret);
         const body = await serializeDocument(safe);
         const safeName = fileName.replace(/(\.csv|\.xlsx)$/i, ".safe$1");
-        return new Response(body, {
+        const responseBody = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer;\n        return new Response(responseBody, {
           status: 200,
           headers: {
             "content-type": document.format === "csv"
