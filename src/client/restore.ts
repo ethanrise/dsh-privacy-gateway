@@ -39,8 +39,10 @@ const LABELS = {
 };
 type Labels = typeof LABELS.en;
 
+// Follow DSH's UI language (mirrored onto <html lang>), not navigator.language,
+// which reflects Electron's launch flag and can stay en-US in a Chinese UI.
 function labels(): Labels {
-  return typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("zh") ? LABELS.zh : LABELS.en;
+  return document.documentElement.lang.toLowerCase().startsWith("zh") ? LABELS.zh : LABELS.en;
 }
 
 function kindOf(placeholder: string): keyof typeof LABELS.en {

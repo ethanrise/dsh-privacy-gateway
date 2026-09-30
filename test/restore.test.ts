@@ -126,6 +126,25 @@ describe("display restore", () => {
     delete (document as any).caretRangeFromPoint;
   });
 
+  it("labels the card in DSH's UI language from <html lang>", async () => {
+    document.documentElement.lang = "zh-CN";
+    document.body.innerHTML = "<p id=a>电话[PHONE_1A2B3C4D5E]</p>";
+    handle = startRestore("x");
+    await settle();
+    const text = document.getElementById("a")!.firstChild as Text;
+    (document as any).caretRangeFromPoint = () => {
+      const range = document.createRange();
+      range.setStart(text, 4);
+      return range;
+    };
+    text.parentElement!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const card = document.querySelector(".dpg-card")!.textContent!;
+    expect(card).toContain("手机号");
+    expect(card).toContain("模型看到的");
+    delete (document as any).caretRangeFromPoint;
+    document.documentElement.lang = "";
+  });
+
   it("keeps placeholders visible when the host is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
     document.body.innerHTML = "<p id=a>[PERSON_0123456789]</p>";
