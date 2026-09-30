@@ -32,13 +32,26 @@ This is a privacy boundary, not a claim that the whole machine is trusted or com
 
 Not in v0.1: PDF, Word, OCR, NER/LLM detection, database connectors, interception of the normal attachment picker.
 
-## Install from source
+## Install
+
+In DSH Desktop, open Settings → Plugins → Add plugin and enter:
+
+```text
+https://github.com/ethanrise/dsh-privacy-gateway
+```
+
+After installing, reload DSH. A 🔒 button appears in the session header and opens the Privacy Gateway tab in the right sidebar.
+
+With the CLI: `dsh plugin --profile web add github:ethanrise/dsh-privacy-gateway`.
+
+## Develop
 
 ```bash
 npm install
 npm run check
-dsh plugin --profile web add github:ethanrise/dsh-privacy-gateway
 ```
+
+`lib/` is committed because DSH installs from the repository without running a build; run `npm run build` and commit `lib/` after source changes.
 
 The repository declares `dsh.bundle` and a Web client entry.
 

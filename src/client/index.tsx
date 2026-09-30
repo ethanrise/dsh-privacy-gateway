@@ -6,7 +6,8 @@ import type { ColumnPolicy, PrivacyScan, RedactionAction } from "../core/types.j
 
 const KIND = "privacy-gateway";
 const TYPE_ID = "dsh-privacy-gateway";
-const BASE = "/api/privacy-gateway/v1";
+// Document-relative, like built-in DSH routes, so it works under a sub-path.
+const BASE = "api/privacy-gateway/v1";
 
 export const inject = ["slots", "sidebarRight", "sidebarRightTabs"] as const;
 
@@ -50,6 +51,7 @@ function GatewayBody(): ReactElement {
     try {
       const response = await fetch(`${BASE}/scan`, {
         method: "POST",
+        credentials: "include",
         headers: { "x-dpg-file-name": encodeURIComponent(target.name) },
         body: target,
       });
@@ -83,6 +85,7 @@ function GatewayBody(): ReactElement {
     try {
       const response = await fetch(`${BASE}/redact`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "x-dpg-file-name": encodeURIComponent(file.name),
           "x-dpg-policy": encodeURIComponent(JSON.stringify(policies)),
