@@ -1,0 +1,42 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run check
+      - name: Pack plugin
+        run: |
+          mkdir -p dist
+          npm pack --pack-destination dist
+          PACK_FILE="$(find dist -maxdepth 1 -name 'dsh-privacy-gateway-*.tgz' -print -quit)"
+          test -n "$PACK_FILE"
+          cp "$PACK_FILE" dist/dsh-privacy-gateway.tgz
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/dsh-privacy-gateway.tgz --clobber
+          else
+            gh release create "$TAG" dist/dsh-privacy-gateway.tgz \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --notes "Prebuilt DeepSeek Harness plugin package."
+          fi
