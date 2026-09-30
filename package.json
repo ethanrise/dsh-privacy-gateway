@@ -1,7 +1,7 @@
 {
   "name": "dsh-privacy-gateway",
-  "version": "0.1.0",
-  "description": "Local-first privacy gateway for safely analyzing sensitive CSV and Excel data with DeepSeek Harness.",
+  "version": "0.2.0",
+  "description": "Local-first privacy gateway for DeepSeek Harness: masks personal data in conversations before it reaches the model and shows originals only on your screen, and creates redacted safe copies of CSV/Excel files.",
   "type": "module",
   "license": "MIT",
   "author": "Ethan Zhao",
@@ -79,9 +79,11 @@
     "react": "^18.2.0"
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^24.0.0",
     "@types/react": "^18.3.0",
     "esbuild": "^0.25.0",
+    "jsdom": "^26.1.0",
     "react": "^18.3.1",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

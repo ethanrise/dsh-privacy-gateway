@@ -1,4 +1,16 @@
 - insert:
     - id: privacy-gateway
       name: 'dsh-privacy-gateway'
-      config: {}
+      config:
+        # Replace names, phone numbers, emails, ID and bank card numbers in
+        # conversation messages with placeholders before the model sees them.
+        maskMessages: true
+        # Also mask tool results (file reads, command output). Off by default:
+        # the model may then write placeholders into files it edits.
+        maskToolResults: false
+        # Any of PERSON, PHONE, EMAIL, ID_CARD, BANK_CARD, IP.
+        entities: [PERSON, PHONE, EMAIL, ID_CARD, BANK_CARD]
+        # Keep placeholder -> original on disk (~/.dsh-privacy-gateway/vault.json,
+        # mode 0600) so earlier conversations still show originals after a restart.
+        persistVault: true
+        maxVaultEntries: 20000
