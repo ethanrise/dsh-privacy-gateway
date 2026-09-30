@@ -43,7 +43,7 @@ function parseCsvDocument(bytes: Uint8Array): TabularDocument {
 
 async function parseXlsxDocument(bytes: Uint8Array): Promise<TabularDocument> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(Buffer.from(bytes));
+  await workbook.xlsx.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   const sheets: TabularSheet[] = [];
   workbook.eachSheet(sheet => {
     const headerRow = sheet.getRow(1);
