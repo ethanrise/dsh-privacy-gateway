@@ -149,10 +149,6 @@ function GatewayBody(): ReactElement {
   );
 }
 
-function OpenButton({ sessionId }: { readonly sessionId: string }): ReactElement {
-  return <button onClick={() => void sessionId && void 0} style={{ display: "none" }} />;
-}
-
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.sidebarRightTabs.register({
     id: TYPE_ID,
@@ -160,8 +156,9 @@ export function apply(ctx: Context): void {
     title: () => "Privacy Gateway",
     guide: [{
       id: "privacy-gateway",
-      title: "Privacy Gateway",
-      description: "Redact sensitive CSV/XLSX data locally before sending a safe copy to AI.",
+      order: 40,
+      title: () => "Privacy Gateway",
+      description: () => "Redact sensitive CSV/XLSX data locally before sending a safe copy to AI.",
     }],
   }), "privacy-gateway: tab type");
 
@@ -180,6 +177,4 @@ export function apply(ctx: Context): void {
       );
     },
   )), "privacy-gateway: header button");
-
-  void OpenButton;
 }
