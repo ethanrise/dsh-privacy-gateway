@@ -1,6 +1,9 @@
+import type { DictionaryMatch } from "./dictionary.js";
 /** Entity kinds recognised in free text (conversation messages and tool results). */
 export type TextEntity = "PERSON" | "PHONE" | "EMAIL" | "ID_CARD" | "BANK_CARD" | "IP";
 export declare const TEXT_ENTITIES: readonly TextEntity[];
+/** Every kind a placeholder can carry, including dictionary-only ORG and TERM. */
+export type PlaceholderKind = TextEntity | "ORG" | "TERM";
 export declare const DEFAULT_TEXT_ENTITIES: readonly TextEntity[];
 /**
  * Placeholders use square brackets: Markdown renders them literally, whereas
@@ -10,18 +13,24 @@ export declare const PLACEHOLDER: RegExp;
 interface Span {
     readonly start: number;
     readonly end: number;
-    readonly kind: TextEntity;
+    readonly kind: PlaceholderKind;
     readonly value: string;
+    /** Word-list hits: the listed term, so any casing shares one placeholder. */
+    readonly term?: string;
+}
+export interface MaskOptions {
+    /** Word-list matcher from compileDictionary(); its hits beat rule hits. */
+    readonly dictionary?: (text: string) => DictionaryMatch[];
 }
 /** Sensitive values in `text`, earliest first, without overlaps. */
-export declare function findEntities(text: string, kinds: readonly TextEntity[]): Span[];
+export declare function findEntities(text: string, kinds: readonly TextEntity[], options?: MaskOptions): Span[];
 export interface MaskResult {
     readonly text: string;
     readonly replaced: number;
     /** placeholder -> original, for every value replaced in this call */
     readonly entries: ReadonlyMap<string, string>;
 }
-export declare function maskText(text: string, kinds: readonly TextEntity[], secret: Buffer): MaskResult;
+export declare function maskText(text: string, kinds: readonly TextEntity[], secret: Buffer, options?: MaskOptions): MaskResult;
 /** Replace known placeholders with their originals; unknown ones stay as they are. */
 export declare function restoreText(text: string, lookup: (placeholder: string) => string | undefined): string;
 export {};

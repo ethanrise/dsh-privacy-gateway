@@ -78,6 +78,34 @@ describe("host plugin", () => {
     expect(decision.content[0].text).toMatch(/^name,phone\n\[PERSON_[0-9A-F]{10}\]先生,\[PHONE_[0-9A-F]{10}\]$/);
   });
 
+  it("saves the word list privately and masks listed terms", async () => {
+    const { ctx, listeners, routes } = fakeContext();
+    apply(ctx as any, { persistVault: false });
+    const saved = await call(routes, "/mask/dictionary", { terms: "字节跳动有限公司\n星河计划" });
+    expect(saved.entries).toEqual([{ term: "字节跳动有限公司", kind: "ORG" }, { term: "星河计划", kind: "TERM" }]);
+    const { statSync } = await import("node:fs");
+    expect(statSync(join(home, ".dsh-privacy-gateway", "dictionary.json")).mode & 0o777).toBe(0o600);
+    const decision = await listeners.get("agent/pre-step")!({}, async () => ({ kind: "enter", messages: [{ content: "字节跳动有限公司的星河计划" }] }));
+    expect(decision.messages[0].content).toMatch(/^\[ORG_[0-9A-F]{10}\]的\[TERM_[0-9A-F]{10}\]$/);
+    // a second plugin instance reads the same list back from disk
+    const again = fakeContext();
+    apply(again.ctx as any, { persistVault: false });
+    expect((await call(again.routes, "/mask/dictionary")).terms).toBe("字节跳动有限公司\n星河计划");
+  });
+
+  it("lists column values of an uploaded CSV for import", async () => {
+    const { ctx, routes } = fakeContext();
+    apply(ctx as any, { persistVault: false });
+    const route = routes.get("/api/privacy-gateway/v1/mask/columns")!;
+    const response = await route.fetch(new Request("http://localhost/x", {
+      method: "POST",
+      headers: { "x-dpg-file-name": "c.csv" },
+      body: "客户名称,金额\n字节跳动有限公司,1\n腾讯科技有限公司,2\n字节跳动有限公司,3\n",
+    }));
+    const payload = await response.json() as any;
+    expect(payload.columns[0]).toEqual({ name: "客户名称", values: ["字节跳动有限公司", "腾讯科技有限公司"] });
+  });
+
   it("persists the vault with private permissions", async () => {
     const { ctx, listeners, routes } = fakeContext();
     apply(ctx as any, {});

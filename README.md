@@ -16,17 +16,19 @@ Model sees:   给客户[PERSON_7C1E0A93B2]发邮件 [EMAIL_41D0E6F8A5]，电话 
 Your screen:  给客户🔒张三发邮件 🔒zs@example.com，电话 🔒13812345678   (highlighted)
 ```
 
-- Detected: PERSON (Chinese names with context such as "客户张三" or "王经理"), PHONE (mainland mobile), EMAIL, ID_CARD (checksum-validated), BANK_CARD (Luhn-validated); IP is opt-in.
+- Detected: PERSON (Chinese names with context such as "客户张三", "王经理" or "王小二的邮箱"), PHONE (mainland mobile), EMAIL, ID_CARD (checksum-validated), BANK_CARD (Luhn-validated); IP is opt-in.
+- Word list: in the Privacy Gateway tab, list company names, people or project code names, one per line, or import a column from a CSV/XLSX customer list. Each term is matched exactly (Latin text case-insensitively, longest term first) and gets its own placeholder automatically; no short forms are derived, so list "字节跳动" separately if you also write it that way. The list is stored in `~/.dsh-privacy-gateway/dictionary.json` with mode `0600`.
 - Placeholders are HMAC-derived: the same value always gets the same placeholder, so the model can still tell people apart and the prompt cache stays stable.
 - The masked text is what DSH stores in the session log. The `placeholder → original` table stays on this machine (`~/.dsh-privacy-gateway/vault.json`, mode `0600`) and is read only by the plugin's own local route.
 - The browser restores placeholders in place, marks each value with 🔒 and a highlight, and opens a card on click showing the type, the placeholder the model saw and the original, with copy buttons. Turn restore off per window in the Privacy Gateway tab to see exactly what the model saw.
 
 Limits:
 
-- Name detection is rule-based and needs context; a bare name with no label or title is not caught, and a name followed by an unusual word may be cut one character long or short.
+- Name detection is rule-based and needs context; a bare name with no label or title is not caught unless it is in the word list, and a name followed by an unusual word may be cut one character long or short.
 - DSH does not allow rewriting tool arguments. If the model writes a file or runs a command, it uses the placeholder, not the original.
 - Message copy buttons copy the stored text, which contains placeholders; selecting restored text copies the 🔒 marker along with it.
 - Tool results (file reads, command output) are masked only with `maskToolResults: true`.
+- Word-list changes apply to messages sent afterwards.
 
 Configuration lives in the plugin's `cordis.patch.yml` row: `maskMessages`, `maskToolResults`, `entities`, `persistVault`, `maxVaultEntries`.
 

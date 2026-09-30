@@ -11,7 +11,7 @@
  */
 // Models often repeat a placeholder without its brackets (tables especially),
 // so both "[PHONE_1A2B3C4D5E]" and a bare "PHONE_1A2B3C4D5E" are restored.
-const TOKEN = "(?:PERSON|PHONE|EMAIL|ID_CARD|BANK_CARD|IP)_[0-9A-F]{10}";
+const TOKEN = "(?:PERSON|PHONE|EMAIL|ID_CARD|BANK_CARD|IP|ORG|TERM)_[0-9A-F]{10}";
 const PATTERN = new RegExp(`\\[(${TOKEN})\\]|(?<![A-Za-z0-9_])(${TOKEN})(?![A-Za-z0-9_])`, "g");
 
 /** Vault key for a match, which is always the bracketed form. */
@@ -34,8 +34,8 @@ interface Segment {
 }
 
 const LABELS = {
-  zh: { PERSON: "姓名", PHONE: "手机号", EMAIL: "邮箱", ID_CARD: "身份证号", BANK_CARD: "银行卡号", IP: "IP 地址", saw: "模型看到的", original: "实际内容", copyOriginal: "复制原文", copyPlaceholder: "复制占位符", copied: "已复制", note: "原文只保存在本机，没有发送给模型。" },
-  en: { PERSON: "Name", PHONE: "Phone", EMAIL: "Email", ID_CARD: "ID card", BANK_CARD: "Bank card", IP: "IP address", saw: "Model saw", original: "Original", copyOriginal: "Copy original", copyPlaceholder: "Copy placeholder", copied: "Copied", note: "The original stays on this machine and was not sent to the model." },
+  zh: { PERSON: "姓名", PHONE: "手机号", EMAIL: "邮箱", ID_CARD: "身份证号", BANK_CARD: "银行卡号", IP: "IP 地址", ORG: "公司", TERM: "词库词条", saw: "模型看到的", original: "实际内容", copyOriginal: "复制原文", copyPlaceholder: "复制占位符", copied: "已复制", note: "原文只保存在本机，没有发送给模型。" },
+  en: { PERSON: "Name", PHONE: "Phone", EMAIL: "Email", ID_CARD: "ID card", BANK_CARD: "Bank card", IP: "IP address", ORG: "Company", TERM: "Word list term", saw: "Model saw", original: "Original", copyOriginal: "Copy original", copyPlaceholder: "Copy placeholder", copied: "Copied", note: "The original stays on this machine and was not sent to the model." },
 };
 type Labels = typeof LABELS.en;
 

@@ -10,5 +10,7 @@ export interface Config {
     /** Keep the placeholder table on disk so history still restores after a restart. */
     persistVault?: boolean;
     maxVaultEntries?: number;
+    /** Where the word list lives; an empty string keeps it in memory only (tests). */
+    dictionaryFile?: string;
 }
 export declare function apply(ctx: Context, config?: Config): void;

@@ -6,6 +6,8 @@ import { buildScan, redactDocument } from "./core/redactor.js";
 import { loadOrCreateSecret } from "./core/tokenizer.js";
 import { DEFAULT_TEXT_ENTITIES, PLACEHOLDER, TEXT_ENTITIES, maskText, type TextEntity } from "./core/textmask.js";
 import { VAULT_FILE, Vault } from "./core/vault.js";
+import { compileDictionary, parseDictionary, type DictionaryMatch } from "./core/dictionary.js";
+import { DICTIONARY_FILE, loadDictionaryText, saveDictionaryText } from "./core/dictionary-store.js";
 
 const BASE = "/api/privacy-gateway/v1";
 const FILE_NAME_HEADER = "x-dpg-file-name";
@@ -36,6 +38,8 @@ export interface Config {
   /** Keep the placeholder table on disk so history still restores after a restart. */
   persistVault?: boolean;
   maxVaultEntries?: number;
+  /** Where the word list lives; an empty string keeps it in memory only (tests). */
+  dictionaryFile?: string;
 }
 
 interface TextBlock { type: "text"; text: string }
@@ -49,6 +53,7 @@ interface HookHost {
 }
 
 const MAX_RESOLVE = 500;
+const MAX_IMPORT_VALUES = 20000;
 
 function isText(block: Block): block is TextBlock {
   return block.type === "text" && typeof (block as TextBlock).text === "string";
@@ -59,14 +64,22 @@ export function apply(ctx: Context, config: Config = {}): void {
   const vault = new Vault(config.persistVault === false ? undefined : VAULT_FILE, config.maxVaultEntries ?? 20000);
   const stats = { enabled: config.maskMessages !== false, replaced: 0, byKind: {} as Record<string, number> };
   let secret: Promise<Buffer> | undefined;
+  let dictionaryText = "";
+  let matcher: (text: string) => DictionaryMatch[] = () => [];
+  function useDictionary(text: string): void {
+    dictionaryText = text;
+    matcher = compileDictionary(parseDictionary(text));
+  }
+  const dictionaryFile = config.dictionaryFile === undefined ? DICTIONARY_FILE : config.dictionaryFile || undefined;
+  const dictionaryLoaded = loadDictionaryText(dictionaryFile).then(useDictionary, () => undefined);
 
   async function maskBlocks<T extends Block>(blocks: T[]): Promise<T[] | undefined> {
     let changed = false;
     const key = await (secret ??= loadOrCreateSecret());
-    await vault.load();
+    await Promise.all([vault.load(), dictionaryLoaded]);
     const out = blocks.map(block => {
       if (!isText(block)) return block;
-      const result = maskText(block.text, entities, key);
+      const result = maskText(block.text, entities, key, { dictionary: matcher });
       if (result.replaced === 0) return block;
       changed = true;
       vault.add(result.entries);
@@ -128,6 +141,53 @@ export function apply(ctx: Context, config: Config = {}): void {
       }
     },
   }), "privacy-gateway: resolve placeholders");
+
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: `${BASE}/mask/dictionary`,
+    methods: ["GET", "POST"],
+    requestBody: "buffered",
+    async fetch(request) {
+      try {
+        await dictionaryLoaded;
+        if (request.method === "POST") {
+          const body = await request.json() as { terms?: unknown };
+          if (typeof body.terms !== "string") throw new Error("terms must be a string");
+          await saveDictionaryText(dictionaryFile, body.terms);
+          useDictionary(body.terms);
+        }
+        return Response.json({ ok: true, terms: dictionaryText, entries: parseDictionary(dictionaryText) });
+      } catch (error) {
+        return jsonError(error);
+      }
+    },
+  }), "privacy-gateway: word list");
+
+  // Column values of an uploaded CSV/XLSX, so a customer list can be imported
+  // into the word list. The file is parsed in memory and never stored.
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: `${BASE}/mask/columns`,
+    methods: ["POST"],
+    requestBody: "streaming",
+    async fetch(request) {
+      try {
+        const fileName = fileNameOf(request);
+        const document = await parseDocument(fileName, await readBytes(request));
+        const columns = document.sheets.flatMap(sheet => sheet.headers.map((header, index) => {
+          const values = new Set<string>();
+          for (const row of sheet.rows) {
+            const cell = row[index];
+            const text = cell === null || cell === undefined ? "" : String(cell).trim();
+            if (text.length > 0 && values.size < MAX_IMPORT_VALUES) values.add(text);
+          }
+          const name = header || `Column ${index + 1}`;
+          return { name: document.sheets.length > 1 ? `${sheet.name} / ${name}` : name, values: [...values] };
+        }));
+        return Response.json({ ok: true, columns });
+      } catch (error) {
+        return jsonError(error);
+      }
+    },
+  }), "privacy-gateway: import columns");
 
   ctx.effect(() => ctx.connection.fetch.register({
     path: `${BASE}/mask/status`,

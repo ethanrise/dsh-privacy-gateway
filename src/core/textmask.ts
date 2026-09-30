@@ -1,22 +1,27 @@
 import { stableToken } from "./tokenizer.js";
+import type { DictionaryMatch } from "./dictionary.js";
 
 /** Entity kinds recognised in free text (conversation messages and tool results). */
 export type TextEntity = "PERSON" | "PHONE" | "EMAIL" | "ID_CARD" | "BANK_CARD" | "IP";
 
 export const TEXT_ENTITIES: readonly TextEntity[] = ["PERSON", "PHONE", "EMAIL", "ID_CARD", "BANK_CARD", "IP"];
+/** Every kind a placeholder can carry, including dictionary-only ORG and TERM. */
+export type PlaceholderKind = TextEntity | "ORG" | "TERM";
 export const DEFAULT_TEXT_ENTITIES: readonly TextEntity[] = ["PERSON", "PHONE", "EMAIL", "ID_CARD", "BANK_CARD"];
 
 /**
  * Placeholders use square brackets: Markdown renders them literally, whereas
  * `<PHONE_1>` would be parsed as an HTML tag and disappear from the page.
  */
-export const PLACEHOLDER = /\[(PERSON|PHONE|EMAIL|ID_CARD|BANK_CARD|IP)_[0-9A-F]{10}\]/g;
+export const PLACEHOLDER = /\[(PERSON|PHONE|EMAIL|ID_CARD|BANK_CARD|IP|ORG|TERM)_[0-9A-F]{10}\]/g;
 
 interface Span {
   readonly start: number;
   readonly end: number;
-  readonly kind: TextEntity;
+  readonly kind: PlaceholderKind;
   readonly value: string;
+  /** Word-list hits: the listed term, so any casing shares one placeholder. */
+  readonly term?: string;
 }
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
@@ -34,6 +39,11 @@ const GIVEN_CHAR = "(?:(?![的是在和与及跟给电手号邮地住说要已�
 const GIVEN = `${GIVEN_CHAR}{1,2}`;
 const NAME_AFTER_LABEL = new RegExp(
   `(?:客户|联系人|姓名|收件人|收货人|寄件人|负责人|经办人|申请人|患者|学生|员工|用户|我叫|名叫|叫做)(?:姓名)?[是为：:\\s]{0,2}([${SURNAMES}]${GIVEN})`,
+  "g",
+);
+// "王小二的邮箱是…": a name directly followed by 的 and a contact-detail word.
+const NAME_BEFORE_CONTACT = new RegExp(
+  `(?<![\\u4e00-\\u9fa5])([${SURNAMES}]${GIVEN})的(?:邮箱|电子邮件|电话|手机|手机号|联系电话|联系方式|身份证|证件号|地址|住址|微信|银行卡|卡号)`,
   "g",
 );
 const NAME_BEFORE_TITLE = new RegExp(
@@ -73,8 +83,13 @@ function collect(text: string, pattern: RegExp, kind: TextEntity, spans: Span[],
   }
 }
 
+export interface MaskOptions {
+  /** Word-list matcher from compileDictionary(); its hits beat rule hits. */
+  readonly dictionary?: (text: string) => DictionaryMatch[];
+}
+
 /** Sensitive values in `text`, earliest first, without overlaps. */
-export function findEntities(text: string, kinds: readonly TextEntity[]): Span[] {
+export function findEntities(text: string, kinds: readonly TextEntity[], options: MaskOptions = {}): Span[] {
   const on = new Set(kinds);
   const spans: Span[] = [];
   // Order matters for overlaps: the more specific pattern wins on a tie.
@@ -86,20 +101,31 @@ export function findEntities(text: string, kinds: readonly TextEntity[]): Span[]
   if (on.has("PERSON")) {
     collect(text, NAME_AFTER_LABEL, "PERSON", spans, undefined, 1);
     collect(text, NAME_BEFORE_TITLE, "PERSON", spans, undefined, 1);
+    collect(text, NAME_BEFORE_CONTACT, "PERSON", spans, undefined, 1);
   }
-  spans.sort((a, b) => a.start - b.start || b.end - a.end);
+  const dictionary = (options.dictionary?.(text) ?? []).map(hit => ({
+    start: hit.start,
+    end: hit.end,
+    kind: hit.entry.kind,
+    value: text.slice(hit.start, hit.end),
+    term: hit.entry.term,
+  }));
+  const pick = (candidates: Span[], taken: Span[]) => {
+    candidates.sort((a, b) => a.start - b.start || b.end - a.end);
+    for (const span of candidates) {
+      if (taken.some(other => span.start < other.end && other.start < span.end)) continue;
+      taken.push(span);
+    }
+  };
+  // Word list first: an explicit term beats whatever a rule would have cut out of it.
   const kept: Span[] = [];
-  let cursor = 0;
-  for (const span of spans) {
-    if (span.start < cursor) continue;
-    kept.push(span);
-    cursor = span.end;
-  }
-  return kept;
+  pick(dictionary, kept);
+  pick(spans, kept);
+  return kept.sort((a, b) => a.start - b.start);
 }
 
 /** Canonical form so "138 1234 5678" and "13812345678" share one placeholder. */
-function canonical(kind: TextEntity, value: string): string {
+function canonical(kind: PlaceholderKind, value: string): string {
   switch (kind) {
     case "PHONE":
     case "BANK_CARD":
@@ -120,15 +146,18 @@ export interface MaskResult {
   readonly entries: ReadonlyMap<string, string>;
 }
 
-export function maskText(text: string, kinds: readonly TextEntity[], secret: Buffer): MaskResult {
-  const spans = findEntities(text, kinds);
+export function maskText(text: string, kinds: readonly TextEntity[], secret: Buffer, options: MaskOptions = {}): MaskResult {
+  const spans = findEntities(text, kinds, options);
   if (spans.length === 0) return { text, replaced: 0, entries: new Map() };
   const entries = new Map<string, string>();
   let out = "";
   let cursor = 0;
   for (const span of spans) {
-    const placeholder = `[${stableToken(secret, span.kind, canonical(span.kind, span.value))}]`;
-    entries.set(placeholder, span.value);
+    const placeholder = span.term === undefined
+      ? `[${stableToken(secret, span.kind, canonical(span.kind, span.value))}]`
+      : `[${stableToken(secret, span.kind, `dictionary\0${span.term}`)}]`;
+    // Word-list placeholders restore to the term as listed.
+    entries.set(placeholder, span.term ?? span.value);
     out += text.slice(cursor, span.start) + placeholder;
     cursor = span.end;
   }

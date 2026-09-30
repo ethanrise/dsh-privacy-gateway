@@ -113,6 +113,112 @@ function ConversationMaskSection(): ReactElement {
   );
 }
 
+interface WordList {
+  terms: string;
+  entries: Array<{ term: string; kind: string }>;
+}
+
+const KIND_LABEL: Record<string, string> = { ORG: "company", PERSON: "name", TERM: "term" };
+const textareaStyle = { width: "100%", boxSizing: "border-box" as const, minHeight: 120, fontFamily: "ui-monospace, monospace", fontSize: 12, resize: "vertical" as const };
+
+function WordListSection(): ReactElement {
+  const [saved, setSaved] = useState<WordList | null>(null);
+  const [terms, setTerms] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  const [columns, setColumns] = useState<Array<{ name: string; values: string[] }> | null>(null);
+  const [column, setColumn] = useState(0);
+
+  async function request(body?: object): Promise<void> {
+    try {
+      const response = await fetch(`${BASE}/mask/dictionary`, body === undefined
+        ? { credentials: "include" }
+        : { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const payload = await response.json() as WordList & { ok: boolean; error?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.error ?? "word list request failed");
+      setSaved(payload);
+      setTerms(payload.terms);
+      if (body !== undefined) setNote(`Saved ${payload.entries.length} terms. They apply to messages sent from now on.`);
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  useEffect(() => void request(), []);
+
+  async function pickImport(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file === undefined) return;
+    try {
+      const response = await fetch(`${BASE}/mask/columns`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "x-dpg-file-name": encodeURIComponent(file.name) },
+        body: file,
+      });
+      const payload = await response.json() as { ok: boolean; columns?: Array<{ name: string; values: string[] }>; error?: string };
+      if (!response.ok || payload.columns === undefined) throw new Error(payload.error ?? "import failed");
+      setColumns(payload.columns);
+      setColumn(0);
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function addColumn(): void {
+    const values = columns?.[column]?.values ?? [];
+    const existing = new Set(terms.split(/\r?\n/).map(line => line.trim().toLowerCase()));
+    const fresh = values.filter(value => !existing.has(value.toLowerCase()));
+    setTerms(current => [current.trimEnd(), ...fresh].filter(Boolean).join("\n"));
+    setColumns(null);
+    setNote(`Added ${fresh.length} terms (${values.length - fresh.length} already listed). Click Save to apply.`);
+  }
+
+  const dirty = saved !== null && terms !== saved.terms;
+  const short = terms.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0 && line.length <= 2 && !line.startsWith("#"));
+  const counts = (saved?.entries ?? []).reduce<Record<string, number>>((all, entry) => ({ ...all, [entry.kind]: (all[entry.kind] ?? 0) + 1 }), {});
+
+  return (
+    <section style={{ borderBottom: "1px solid rgba(128,128,128,.25)", paddingBottom: 14, marginBottom: 14 }}>
+      <h3 style={{ margin: "0 0 6px" }}>Word list</h3>
+      <p style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.45, margin: "0 0 8px" }}>
+        One term per line: company names, people, project code names. Each is matched exactly and masked
+        with its own placeholder, generated automatically. Lines starting with # are comments.
+      </p>
+      <textarea style={textareaStyle} value={terms} onChange={event => setTerms(event.target.value)} placeholder={"字节跳动有限公司\n王小二\n星河计划"} />
+      {short.length > 0 && (
+        <div style={{ fontSize: 11, color: "#c80", margin: "2px 0 6px" }}>
+          Short terms can also mask unrelated text: {short.slice(0, 5).join("、")}{short.length > 5 ? " …" : ""}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+        <button disabled={!dirty} onClick={() => void request({ terms })}>Save</button>
+        <label style={{ fontSize: 12 }}>
+          Import a column from CSV/XLSX: <input type="file" accept=".csv,.xlsx" onChange={event => void pickImport(event)} />
+        </label>
+      </div>
+      {columns !== null && (
+        <div style={{ marginTop: 8, fontSize: 12 }}>
+          <select value={column} onChange={event => setColumn(Number(event.target.value))}>
+            {columns.map((item, index) => <option key={index} value={index}>{item.name} ({item.values.length})</option>)}
+          </select>
+          {" "}
+          <button onClick={addColumn}>Add to list</button>
+          {" "}
+          <button onClick={() => setColumns(null)}>Cancel</button>
+          <div style={{ opacity: 0.7, marginTop: 4 }}>{columns[column]?.values.slice(0, 5).join("、")}{(columns[column]?.values.length ?? 0) > 5 ? " …" : ""}</div>
+        </div>
+      )}
+      {saved !== null && saved.entries.length > 0 && (
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+          In effect: {saved.entries.length} terms ({Object.entries(counts).map(([kind, count]) => `${KIND_LABEL[kind] ?? kind} ${count}`).join(" · ")})
+        </div>
+      )}
+      {note !== null && <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>{note}</div>}
+    </section>
+  );
+}
+
 function GatewayBody(): ReactElement {
   const [file, setFile] = useState<File | null>(null);
   const [scan, setScan] = useState<PrivacyScan | null>(null);
@@ -198,6 +304,7 @@ function GatewayBody(): ReactElement {
     <div style={{ padding: 16, fontFamily: "system-ui", overflow: "auto", height: "100%" }}>
       <h2 style={{ marginTop: 0 }}>🔒 Privacy Gateway</h2>
       <ConversationMaskSection />
+      <WordListSection />
       <h3 style={{ margin: "0 0 6px" }}>Spreadsheet safe copy</h3>
       <p style={{ opacity: 0.78, lineHeight: 1.45 }}>
         Process CSV/XLSX locally before AI sees the data. Raw values are not written to the conversation or logs.

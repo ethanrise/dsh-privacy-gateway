@@ -24,6 +24,9 @@ describe("findEntities", () => {
     expect(kinds("给客户张三发邮件，客户李小明也来了")).toEqual([["PERSON", "张三"], ["PERSON", "李小明"]]);
     expect(kinds("联系人：欧阳")).toEqual([["PERSON", "欧阳"]]);
     expect(kinds("张开双臂，王道之路")).toEqual([]);
+    expect(kinds("王小二的邮箱是 a@b.co")).toEqual([["PERSON", "王小二"], ["EMAIL", "a@b.co"]]);
+    expect(kinds("以下信息：王小二的电话")).toEqual([["PERSON", "王小二"]]);
+    expect(kinds("大王的手机")).toEqual([]);
     expect(kinds("请李小姐确认")).toEqual([["PERSON", "李"]]);
   });
 
