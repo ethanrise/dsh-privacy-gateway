@@ -2,8 +2,12 @@ name: release
 
 on:
   workflow_dispatch:
+  # Rebuild the release asset whenever the version (package.json) or this
+  # workflow changes on main, so the listed tarball never lags the source.
   push:
+    branches: [main]
     paths:
+      - "package.json"
       - ".github/workflows/release.yml"
 
 permissions:
