@@ -1,0 +1,4 @@
+- insert:
+    - id: privacy-gateway
+      name: 'dsh-privacy-gateway'
+      config: {}
