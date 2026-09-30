@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { startRestore, type RestoreHandle } from "../src/client/restore.js";
+import { LOCK, startRestore, type RestoreHandle } from "../src/client/restore.js";
 
 const VALUES: Record<string, string> = {
   "[PHONE_1A2B3C4D5E]": "13812345678",
@@ -34,13 +34,13 @@ describe("display restore", () => {
     document.body.innerHTML = "<p id=a>客户[PERSON_0123456789]的电话是[PHONE_1A2B3C4D5E]</p>";
     handle = startRestore("api/privacy-gateway/v1/mask/resolve");
     await settle();
-    expect(document.getElementById("a")!.textContent).toBe("客户张三的电话是13812345678");
+    expect(document.getElementById("a")!.textContent).toBe(`客户${LOCK}张三的电话是${LOCK}13812345678`);
 
     const later = document.createElement("p");
     later.textContent = "再打给 [PHONE_1A2B3C4D5E]";
     document.body.append(later);
     await settle();
-    expect(later.textContent).toBe("再打给 13812345678");
+    expect(later.textContent).toBe(`再打给 ${LOCK}13812345678`);
     // the second sighting is served from cache
     expect(calls).toHaveLength(1);
   });
@@ -55,7 +55,7 @@ describe("display restore", () => {
     expect(text.data).toBe("号码 [PHONE_1A2B");
     text.data = "号码 [PHONE_1A2B3C4D5E] 已确认";
     await settle();
-    expect(text.data).toBe("号码 13812345678 已确认");
+    expect(text.data).toBe(`号码 ${LOCK}13812345678 已确认`);
   });
 
   it("leaves unknown placeholders and editable fields alone", async () => {
@@ -76,12 +76,43 @@ describe("display restore", () => {
     handle = startRestore("x");
     await settle();
     const p = document.getElementById("a")!;
-    expect(p.textContent).toBe("张三");
+    expect(p.textContent).toBe(`${LOCK}张三`);
     handle.setEnabled(false);
     expect(p.textContent).toBe("[PERSON_0123456789]");
     handle.setEnabled(true);
     await settle();
-    expect(p.textContent).toBe("张三");
+    expect(p.textContent).toBe(`${LOCK}张三`);
+  });
+
+  it("opens a card with placeholder and original on click, and closes it", async () => {
+    document.body.innerHTML = "<p id=a>客户[PERSON_0123456789]，电话[PHONE_1A2B3C4D5E]</p>";
+    handle = startRestore("x");
+    await settle();
+    const text = document.getElementById("a")!.firstChild as Text;
+    const phoneAt = text.data.indexOf("138");
+    // jsdom has no layout, so stand in for the caret lookup a real click does
+    (document as any).caretRangeFromPoint = () => {
+      const range = document.createRange();
+      range.setStart(text, phoneAt + 2);
+      return range;
+    };
+    document.getElementById("a")!.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }));
+    const card = document.querySelector(".dpg-card")!;
+    expect(card).not.toBeNull();
+    expect(card.textContent).toContain("[PHONE_1A2B3C4D5E]");
+    expect(card.textContent).toContain("13812345678");
+    await settle();
+    // the card's own placeholder text must not be "restored" by the observer
+    expect(card.querySelector("dd")!.textContent).toBe("[PHONE_1A2B3C4D5E]");
+
+    (document as any).caretRangeFromPoint = () => {
+      const range = document.createRange();
+      range.setStart(text, 0);
+      return range;
+    };
+    document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelector(".dpg-card")).toBeNull();
+    delete (document as any).caretRangeFromPoint;
   });
 
   it("keeps placeholders visible when the host is unreachable", async () => {
