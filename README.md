@@ -4,7 +4,7 @@ English · [简体中文](README.zh.md)
 
 Local privacy gateway for DeepSeek Harness (DSH).
 
-> I want AI to work with customer data, but I do not want real names, phone numbers and ID numbers to reach the model.
+> **I want AI to work with customer data, but I do not want real names, phone numbers and ID numbers to reach the model.**
 
 It does two things:
 
