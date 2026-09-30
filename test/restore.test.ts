@@ -58,6 +58,17 @@ describe("display restore", () => {
     expect(text.data).toBe(`号码 ${LOCK}13812345678 已确认`);
   });
 
+  it("restores placeholders the model repeated without brackets", async () => {
+    document.body.innerHTML = "<table><tr><td id=a>PERSON_0123456789</td><td id=b>PHONE_1A2B3C4D5E。</td><td id=c>XPHONE_1A2B3C4D5E</td></tr></table>";
+    handle = startRestore("x");
+    await settle();
+    expect(document.getElementById("a")!.textContent).toBe(`${LOCK}张三`);
+    expect(document.getElementById("b")!.textContent).toBe(`${LOCK}13812345678。`);
+    // part of a longer identifier: not a placeholder
+    expect(document.getElementById("c")!.textContent).toBe("XPHONE_1A2B3C4D5E");
+    expect(calls.flat().sort()).toEqual(["[PERSON_0123456789]", "[PHONE_1A2B3C4D5E]"]);
+  });
+
   it("leaves unknown placeholders and editable fields alone", async () => {
     document.body.innerHTML = "<p id=a>[PHONE_FFFFFFFFFF]</p><textarea id=t>[PHONE_1A2B3C4D5E]</textarea><div contenteditable=true id=c>[PHONE_1A2B3C4D5E]</div>";
     handle = startRestore("x");

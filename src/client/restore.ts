@@ -9,7 +9,15 @@
  * clicking one opens a card (outside the conversation tree) showing the
  * placeholder the model saw next to the original.
  */
-const PATTERN = /\[(?:PERSON|PHONE|EMAIL|ID_CARD|BANK_CARD|IP)_[0-9A-F]{10}\]/g;
+// Models often repeat a placeholder without its brackets (tables especially),
+// so both "[PHONE_1A2B3C4D5E]" and a bare "PHONE_1A2B3C4D5E" are restored.
+const TOKEN = "(?:PERSON|PHONE|EMAIL|ID_CARD|BANK_CARD|IP)_[0-9A-F]{10}";
+const PATTERN = new RegExp(`\\[(${TOKEN})\\]|(?<![A-Za-z0-9_])(${TOKEN})(?![A-Za-z0-9_])`, "g");
+
+/** Vault key for a match, which is always the bracketed form. */
+function keyOf(match: RegExpMatchArray): string {
+  return `[${match[1] ?? match[2]}]`;
+}
 // Non-global twin for presence checks: test() on a /g regex moves lastIndex,
 // and matchAll() starts its copy from there, silently skipping earlier matches.
 const HAS_PLACEHOLDER = new RegExp(PATTERN.source);
@@ -127,7 +135,8 @@ export function startRestore(resolveUrl: string): RestoreHandle {
     const unknown = new Set<string>();
     for (const node of nodes) {
       for (const match of node.data.matchAll(PATTERN)) {
-        if (!known.has(match[0]) && !missing.has(match[0])) unknown.add(match[0]);
+        const key = keyOf(match);
+        if (!known.has(key) && !missing.has(key)) unknown.add(key);
       }
     }
     if (unknown.size > 0) {
@@ -151,12 +160,13 @@ export function startRestore(resolveUrl: string): RestoreHandle {
     let out = "";
     let cursor = 0;
     for (const match of source.matchAll(PATTERN)) {
-      const value = known.get(match[0]);
+      const key = keyOf(match);
+      const value = known.get(key);
       if (value === undefined || match.index === undefined) continue;
       out += source.slice(cursor, match.index);
       const start = out.length;
       out += LOCK + value;
-      found.push({ start, end: out.length, placeholder: match[0], value });
+      found.push({ start, end: out.length, placeholder: key, value });
       cursor = match.index + match[0].length;
     }
     if (found.length === 0) return;
